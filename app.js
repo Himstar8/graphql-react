@@ -1,9 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const bcrypt = require('bcryptjs');
+const isAuth = require('./middlewares/isAuth');
 
 const graphqlHttp = require('express-graphql'); // Middleware ready :=)
-const { buildSchema } = require('graphql');
 
 const graphqlSchema = require('./graphql/schema/index');
 const graphqlResolvers = require('./graphql/resolvers/index');
@@ -18,6 +17,8 @@ if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
   // console.log(process.env.MONGO_URI);
 }
+
+app.use(isAuth);
 
 app.use(
   '/graphql',
