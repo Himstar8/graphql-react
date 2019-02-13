@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcryptjs');
 
 const graphqlHttp = require('express-graphql'); // Middleware ready :=)
 const { buildSchema } = require('graphql');
@@ -8,6 +9,7 @@ const mongoose = require('mongoose');
 mongoose.Promise = global.Promise;
 
 const Event = require('./models/event');
+const User = require('./models/User');
 
 const app = express();
 app.use(bodyParser.json());
@@ -31,6 +33,17 @@ app.use(
           date: String!
         }
 
+        type User {
+          _id: ID!
+          email: String!
+          password: String
+        }
+
+        input UserInput {
+          email: String!
+          password: String
+        }
+
         input EventInput {
           title: String! 
           description: String!
@@ -44,6 +57,7 @@ app.use(
 
         type RootMutation {
           createEvent(eventInput: EventInput): Event
+          createUser(userInput: UserInput): User
         }
 
         schema {
@@ -68,28 +82,58 @@ app.use(
           });
       },
       createEvent: args => {
-        // const event = {
-        //   _id: Math.random().toString(),
-        //   title: args.eventInput.title,
-        //   description: args.eventInput.description,
-        //   date: args.eventInput.date,
-        //   price: +args.eventInput.price
-        // };
-
         const event = new Event({
           title: args.eventInput.title,
           description: args.eventInput.description,
           date: new Date(args.eventInput.date),
-          price: +args.eventInput.price
+          price: +args.eventInput.price,
+          creator: '5c63dcd3faaa202a94fde90d'
         });
+
+        let createdEvent;
 
         return event
           .save()
           .then(res => {
-            return { ...res._doc };
+            createdEvent = { ...res._doc };
+            // Grab the user who create the event
+            return User.findById('5c63dcd3faaa202a94fde90d');
+          })
+          .then(user => {
+            if (!user) {
+              throw new Error("User doesn't exist");
+            }
+            user.createdEvents.push(event); // We can either pass the hole event or just the event ID
+            return user.save();
+          })
+          .then(result => {
+            return createdEvent;
           })
           .catch(err => {
             console.log(err);
+            throw err;
+          });
+      },
+      createUser: args => {
+        return User.findOne({ email: args.userInput.email })
+          .then(user => {
+            if (user) {
+              throw new Error('User already exist');
+            }
+            return bcrypt.hash(args.userInput.password, 12);
+          })
+          .then(psw => {
+            const user = new User({
+              email: args.userInput.email,
+              password: psw
+            });
+            return user.save();
+          })
+          .then(user => {
+            return { ...user._doc, password: null };
+          })
+          .catch(err => {
+            // console.log(err);
             throw err;
           });
       }
